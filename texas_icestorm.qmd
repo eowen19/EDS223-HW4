@@ -1,0 +1,44 @@
+
+
+```{r}
+library(sf)          # vector handling
+library(terra)       # raster handling
+library(tidyverse)
+library(tmap)        # map making
+library(viridisLite)
+library(kableExtra) # table formatting
+library(spData) # spatial data
+library(spDataLarge) # spatial data
+library(geodata) # spatial data
+library(stars)
+```
+
+```{r}
+roads <- read_sf('EDS223-HW4/data/gis_osm_roads_free_1.gpkg', query = "SELECT * FROM gis_osm_roads_free_1 WHERE fclass='motorway'")
+buildings <- read_sf('EDS223-HW4/data/gis_osm_buildings_a_free_1.gpkg')
+
+h8v5_07 <- rast('EDS223-HW4/data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif')
+h8v6_07 <- rast('EDS223-HW4/data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif')
+
+h8v5_16 <- rast('EDS223-HW4/data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif')
+h8v6_16 <- rast('EDS223-HW4/data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif') 
+
+```
+
+```{r}
+cat("\n=== Same CRS? ===\n")
+cat("roads vs buildings: ", same.crs(roads, buildings), "\n")
+cat("roads vs h8v6_07: ", same.crs(roads, h8v6_07), "\n")
+cat("h8v6_07 vs h8v5_16: ", same.crs(h8v6_07, h8v5_16), "\n")
+```
+
+```{r}
+tile1 <- ext(-100, -90, 30, 40) 
+tile_1_16 <- project(tile1, crs(h8v6_16))
+```
+```{r}
+tile_16_02 <- merge(h8v5_16,h8v6_16)
+
+tile_07_02 <- merge(h8v5_07,h8v6_07)
+
+```
