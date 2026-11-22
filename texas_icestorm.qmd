@@ -1,5 +1,16 @@
-
-## Load the libraries
+---
+title: "EDS223 - Homework Assignment 4"
+subtitle: "Houston Blackout Following February 2021 Storms"
+author: Elyse Owen
+date: 11/21/2026
+format:
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: true
+---
+## Create mask of blackout post-storm
+### Load the libraries
 ```{r}
 library(sf)          # vector handling
 library(terra)       # raster handling
@@ -13,7 +24,7 @@ library(geodata) # spatial data
 library(stars)
 ```
 
-## Load the data
+### Load the data
 ```{r}
 roads_query <- "SELECT * FROM gis_osm_roads_free_1 WHERE fclass='motorway'"
 # Reading in highways data
@@ -35,7 +46,7 @@ feb_16_h5 <- read_stars('data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.
 feb_16_h6 <- read_stars('data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif') 
 ```
 
-## Check that CRS match
+### Check that CRS match
 ```{r}
 cat("\n=== Same CRS? ===\n")
 cat("highways vs houses: ", same.crs(highways, houses), "\n")
@@ -43,12 +54,13 @@ cat("highways vs feb_07_h5: ", same.crs(highways, feb_07_h5), "\n")
 cat("feb_07_h5 vs feb_16_h6: ", same.crs(feb_07_h5, feb_16_h6), "\n")
 ```
 
-## Merge tiles together to create a 07 February 2021 tile and a 16 February 2021 tile.
+### Merge tiles together to create a 07 February 2021 tile and a 16 February 2021 tile.
 ```{r}
 houston_post_storm <- st_mosaic(feb_16_h5, feb_16_h6)
 
 houston_pre_storm <- st_mosaic(feb_07_h5,feb_07_h6)
 ```
+### Check if extents match
 ```{r}
 if(all(st_bbox(houston_pre_storm) == st_bbox(houston_post_storm))){
   print("extents match")
@@ -57,9 +69,11 @@ if(all(st_bbox(houston_pre_storm) == st_bbox(houston_post_storm))){
 }
 ```
 
+### Create differentiated raster of pre- and post-storm night-time lights
 ```{r}
 houston_diff <- rast(houston_pre_storm) - rast(houston_post_storm)
 ```
+### Create blackout mask matrix
 ```{r}
 blackout_mask <- classify(houston_diff, matrix(
     c(-Inf, 200, NA, # No blackout
@@ -68,13 +82,13 @@ blackout_mask <- classify(houston_diff, matrix(
 ncol = 3,
 byrow = TRUE))
 ```
-
+### Create bounding box of Houston, Texas
 ```{r}
 houston_bbox <- st_bbox(c(xmin = -96.5, ymin = 29,
 xmax = -94.5, ymax = 30.5),
 crs = st_crs(feb_07_h5))
 ```
-
+### Convert blackout mask from a raster to a vector
 ```{r}
 blackout_vectorised <- st_as_stars(blackout_mask) |> 
     st_as_sf() |> 
@@ -82,7 +96,7 @@ blackout_vectorised <- st_as_stars(blackout_mask) |>
 blackout_houston <- st_crop(blackout_vectorised, houston_bbox) |> 
     st_transform(crs = 'EPSG:3038')
 ```
-
+### Crop pre- and post-storm tiles to Houston bounding box
 ```{r}
 pre_crop <- st_crop(houston_pre_storm, houston_bbox)
 post_crop <- st_crop(houston_post_storm, houston_bbox)
@@ -90,7 +104,7 @@ light_combined <- c(pre_crop, post_crop)
 names(light_combined) <- c("07-02-2021", "16-02-2021")
 lights <- merge(light_combined)
 ```
-
+## Map the pre- and post-ice storm nighttime light across Houston
 ```{r}
 tm_shape(lights) +
 tm_raster(
@@ -104,23 +118,23 @@ tm_title("Houston Night Time Light Intensity Before and After February 2021 Stor
 tm_compass(position = c("right", "bottom"), size = 0.5) +
 tm_scalebar(position = tm_pos_out("center", "bottom"))
 ```
+## Isolate highways and homes
+### Create 200m buffer around the highways
 ```{r}
 highways <- st_transform(highways, crs = 'EPSG:3038')
 highway_buffer <- highways |>
 st_union() |>
 st_buffer(dist = 200)
 ```
-
+### Match CRSs, filter to only home that experienced a blackout on 16 February 2021
 ```{r}
 blackout_houston <- st_transform(blackout_houston, crs = 'EPSG:3038')
-```
-```{r}
 blackout_final <- st_difference(blackout_houston, highway_buffer)
 blackout_houses <- st_transform(houses, crs = 'EPSG:3038') |>
     st_filter(blackout_final)
 n_blackout_houses <- nrow(blackout_houses) #  houses
 ```
-
+## Create final map of homes that experienced a blackout of 16 February 2021
 ```{r}
 tm_basemap("OpenStreetMap.HOT") + 
   tm_shape(blackout_houses) + # Homes where power was lost
