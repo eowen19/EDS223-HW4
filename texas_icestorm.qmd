@@ -16,13 +16,16 @@ library(stars)
 ## Load the data
 ```{r}
 roads <- read_sf('EDS223-HW4/data/gis_osm_roads_free_1.gpkg', query = "SELECT * FROM gis_osm_roads_free_1 WHERE fclass='motorway'")
-buildings <- read_sf('EDS223-HW4/data/gis_osm_buildings_a_free_1.gpkg')
+buildings <- read_sf('EDS223-HW4/data/gis_osm_buildings_a_free_1.gpkg', query = "SELECT *
+FROM gis_osm_buildings_a_free_1 
+WHERE (type IS NULL AND name IS NULL)
+OR type in ('residential', 'apartments', 'house', 'static_caravan', 'detached')")
 
-h8v5_07 <- rast('EDS223-HW4/data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif')
-h8v6_07 <- rast('EDS223-HW4/data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif')
+feb_07_h5 <- read_stars('EDS223-HW4/data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif')
+feb_07_h6 <- read_stars('EDS223-HW4/data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif')
 
-h8v5_16 <- rast('EDS223-HW4/data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif')
-h8v6_16 <- rast('EDS223-HW4/data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif') 
+feb_16_h5 <- read_stars('EDS223-HW4/data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif')
+feb_16_h6 <- read_stars('EDS223-HW4/data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif') 
 
 ```
 
@@ -30,31 +33,61 @@ h8v6_16 <- rast('EDS223-HW4/data/VNP46A1/VNP46A1.A2021047.h08v06.001.20210480911
 ```{r}
 cat("\n=== Same CRS? ===\n")
 cat("roads vs buildings: ", same.crs(roads, buildings), "\n")
-cat("roads vs h8v6_07: ", same.crs(roads, h8v6_07), "\n")
-cat("h8v6_07 vs h8v5_16: ", same.crs(h8v6_07, h8v5_16), "\n")
+cat("roads vs feb_07_h5: ", same.crs(roads, feb_07_h5), "\n")
+cat("feb_07_h5 vs feb_16_h6: ", same.crs(feb_07_h5, feb_16_h6), "\n")
 ```
 
 ## Merge tiles together to create a 07 February 2021 tile and a 16 February 2021 tile.
 ```{r}
-tile_16_02 <- merge(h8v5_16,h8v6_16)
+houston_post_storm <- st_mosaic(feb_16_h5, feb_16_h6)
 
-tile_07_02 <- merge(h8v5_07,h8v6_07)
+houston_pre_storm <- st_mosaic(feb_07_h5,feb_07_h6)
+```
+```{r}
+if(all(st_bbox(houston_pre_storm) == st_bbox(houston_post_storm))){
+  print("extents match")
+} else{
+  print("warning: extents do not match")
+}
 ```
 
 ```{r}
-rcl <- matrix(c(-Inf, 200, NA,   
-                200, Inf, 1), 
-              ncol = 3, byrow = TRUE)
-post_blackout_rcl <- terra::classify(tile_16_02, rcl = rcl)
-pre_blackout_rcl <- terra::classify(tile_07_02, rcl = rcl)
+houston_diff <- rast(houston_pre_storm) - rast(houston_post_storm)
 ```
 ```{r}
-houston_mask <- mask(post_blackout_rcl, pre_blackout_rcl)
-houston <- ext(-96.5, -94.5, 29, 30.5)
-houston_mask_cropped <- crop(houston_mask, houston)
-plot(houston_mask_cropped)
+blackout_mask <- classify(houston_diff, matrix(
+    c(-Inf, 200, NA, # No blackout
+    200, Inf, 1   # Blackout
+),
+ncol = 3,
+byrow = TRUE))
+```
+```{r}
+blackout_mask <- st_as_stars(blackout_mask)
 
-houston_mask_cropped <- project(houston_mask_cropped, crs('EPSG:3083'))
+blackout_mask <- st_as_sf(blackout_mask) |> 
+    st_make_valid()
+```
+```{r}
+houston_bbox <- st_bbox(c(xmin = -96.5, ymin = 29,
+xmax = -94.5, ymax = 30.5),
+crs = st_crs(feb_07_h5))
+```
+```{r}
+blackout_houston <- st_crop(blackout_mask, houston_bbox) |>
+st_transform(crs = 'EPSG:3083')
+plot(blackout_houston)
+```
 
+```{r}
+highways <- vect(roads) |>
+  project("EPSG:3083")
 
+hwy_buffer <- buffer(highways, width = 200) |>   # 200 m around each segment
+  aggregate()                                     # dissolve into one shape              
+```
+
+```{r}
+tm_shape(houston_mask_cropped)+
+    tm_borders(buildings)
 ```
