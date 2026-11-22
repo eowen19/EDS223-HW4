@@ -9,6 +9,9 @@ format:
     number-sections: true
     colorlinks: true
 ---
+## Summarised Discussiona and Limitations
+This analysis demonstrates the change in night-time light in Houston, Texas between 07 February 2021 and 16 February 2021, following several significant ice storms that knocked out power for thousands of homes. Some limitations include the parameters (200nWcm^-2 sr^-1) that established whether or not the amount on light in the image denoted a blackout or not. Additionally, by only using one post-storm image, we do not have a complete picture of the effects of the blackout - some power could have come on sooner, or homes that had power could have been uninhabitated for other reasons. 
+
 ## Create mask of blackout post-storm
 ### Load the libraries
 ```{r}
@@ -118,6 +121,8 @@ tm_title("Houston Night Time Light Intensity Before and After February 2021 Stor
 tm_compass(position = c("right", "bottom"), size = 0.5) +
 tm_scalebar(position = tm_pos_out("center", "bottom"))
 ```
+These two maps show that there was overall less night-time light on 16 February than there was on 07 February. 
+
 ## Isolate highways and homes
 ### Create 200m buffer around the highways
 ```{r}
@@ -144,3 +149,4 @@ tm_basemap("OpenStreetMap.HOT") +
   tm_compass(position = c("top", "right")) +
   tm_title("Homes In Houston That Experienced Power Outages, February 2021")
 ```
+Completed map showing the areas (as homes) that experienced a blackout or power outage in February 2021. Total homes experiencing blackout: 161982
