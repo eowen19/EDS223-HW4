@@ -15,25 +15,31 @@ library(stars)
 
 ## Load the data
 ```{r}
-roads <- read_sf('EDS223-HW4/data/gis_osm_roads_free_1.gpkg', query = "SELECT * FROM gis_osm_roads_free_1 WHERE fclass='motorway'")
-buildings <- read_sf('EDS223-HW4/data/gis_osm_buildings_a_free_1.gpkg', query = "SELECT *
-FROM gis_osm_buildings_a_free_1 
+roads_query <- "SELECT * FROM gis_osm_roads_free_1 WHERE fclass='motorway'"
+# Reading in highways data
+highways <- st_read("EDS223-HW4/data/gis_osm_roads_free_1.gpkg", query=roads_query) # vector
+
+#Load houses data 
+# Query for certain buildings
+houses_query <- "SELECT *
+FROM gis_osm_buildings_a_free_1
 WHERE (type IS NULL AND name IS NULL)
-OR type in ('residential', 'apartments', 'house', 'static_caravan', 'detached')")
+OR type in ('residential', 'apartments', 'house', 'static_caravan', 'detached')"
+# Reading in houses data
+houses <- st_read("EDS223-HW4/data/gis_osm_buildings_a_free_1.gpkg", query=houses_query) # vector
 
 feb_07_h5 <- read_stars('EDS223-HW4/data/VNP46A1/VNP46A1.A2021038.h08v05.001.2021039064328.tif')
 feb_07_h6 <- read_stars('EDS223-HW4/data/VNP46A1/VNP46A1.A2021038.h08v06.001.2021039064329.tif')
 
 feb_16_h5 <- read_stars('EDS223-HW4/data/VNP46A1/VNP46A1.A2021047.h08v05.001.2021048091106.tif')
 feb_16_h6 <- read_stars('EDS223-HW4/data/VNP46A1/VNP46A1.A2021047.h08v06.001.2021048091105.tif') 
-
 ```
 
 ## Check that CRS match
 ```{r}
 cat("\n=== Same CRS? ===\n")
-cat("roads vs buildings: ", same.crs(roads, buildings), "\n")
-cat("roads vs feb_07_h5: ", same.crs(roads, feb_07_h5), "\n")
+cat("highways vs houses: ", same.crs(highways, houses), "\n")
+cat("highways vs feb_07_h5: ", same.crs(highways, feb_07_h5), "\n")
 cat("feb_07_h5 vs feb_16_h6: ", same.crs(feb_07_h5, feb_16_h6), "\n")
 ```
 
@@ -62,32 +68,65 @@ blackout_mask <- classify(houston_diff, matrix(
 ncol = 3,
 byrow = TRUE))
 ```
-```{r}
-blackout_mask <- st_as_stars(blackout_mask)
 
-blackout_mask <- st_as_sf(blackout_mask) |> 
-    st_make_valid()
-```
 ```{r}
 houston_bbox <- st_bbox(c(xmin = -96.5, ymin = 29,
 xmax = -94.5, ymax = 30.5),
 crs = st_crs(feb_07_h5))
 ```
+
 ```{r}
-blackout_houston <- st_crop(blackout_mask, houston_bbox) |>
-st_transform(crs = 'EPSG:3083')
-plot(blackout_houston)
+blackout_vectorised <- st_as_stars(blackout_mask) |> 
+    st_as_sf() |> 
+    st_make_valid()
+blackout_houston <- st_crop(blackout_vectorised, houston_bbox) |> 
+    st_transform(crs = 'EPSG:3038')
 ```
 
 ```{r}
-highways <- vect(roads) |>
-  project("EPSG:3083")
-
-hwy_buffer <- buffer(highways, width = 200) |>   # 200 m around each segment
-  aggregate()                                     # dissolve into one shape              
+pre_crop <- st_crop(houston_pre_storm, houston_bbox)
+post_crop <- st_crop(houston_post_storm, houston_bbox)
+light_combined <- c(pre_crop, post_crop)
+names(light_combined) <- c("07-02-2021", "16-02-2021")
+lights <- merge(light_combined)
 ```
 
 ```{r}
-tm_shape(houston_mask_cropped)+
-    tm_borders(buildings)
+tm_shape(lights) +
+tm_raster(
+col.scale = tm_scale_continuous_log1p(values = "magma"),
+col.legend = tm_legend(
+title = "Night light radiance (nW/cm²/sr)",
+orientation = "landscape"
+)
+) +
+tm_title("Houston Night Time Light Intensity Before and After February 2021 Storms") +
+tm_compass(position = c("right", "bottom"), size = 0.5) +
+tm_scalebar(position = tm_pos_out("center", "bottom"))
+```
+```{r}
+highways <- st_transform(highways, crs = 'EPSG:3038')
+highway_buffer <- highways |>
+st_union() |>
+st_buffer(dist = 200)
+```
+
+```{r}
+blackout_houston <- st_transform(blackout_houston, crs = 'EPSG:3038')
+```
+```{r}
+blackout_final <- st_difference(blackout_houston, highway_buffer)
+blackout_houses <- st_transform(houses, crs = 'EPSG:3038') |>
+    st_filter(blackout_final)
+n_blackout_houses <- nrow(blackout_houses) #  houses
+```
+
+```{r}
+tm_basemap("OpenStreetMap.HOT") + 
+  tm_shape(blackout_houses) + # Homes where power was lost
+  tm_polygons(size = 0.05, fill = "grey", fill_alpha = 0.7) +
+  tm_add_legend(labels = 'Blackout Areas', position = c("bottom", "right")) +
+  tm_scalebar(position = c("bottom", "left")) + # Add scalebar and compass
+  tm_compass(position = c("top", "right")) +
+  tm_title("Homes In Houston That Experienced Power Outages, February 2021")
 ```
